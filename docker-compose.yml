@@ -1,0 +1,96 @@
+version: '3.7'
+services:
+    sample:
+        container_name: sample
+        build:
+          context: .
+          dockerfile: ./app/Dockerfile
+        volumes:
+          - ./app/:/app/
+        working_dir: /app/
+        ports:
+          - '3001:3000'
+        environment:
+          - NODE_ENV=development
+          - CHOKIDAR_USEPOLLING=true
+
+    php_laravel:
+        build:
+          context: .
+          dockerfile: ./laravel/Dockerfile
+        image: digitalocean.com/php
+        restart: unless-stopped
+        tty: true
+        volumes:
+            - ./laravel/:/var/www/
+            - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+        environment:
+          SERVICE_NAME: php_laravel
+          SERVICE_TAGS: dev
+        working_dir: /var/www
+        networks:
+          - app-network
+
+    nginx_laravel:
+        depends_on:
+            - php_laravel
+        image: nginx:alpine
+        restart: unless-stopped
+        tty: true
+        volumes: 
+            - ./laravel/:/var/www/
+            - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+        ports:
+            - "8888:80"
+        networks:
+            - app-network
+
+    njs1:
+        build: ./njs1
+        command: sh -c "npm install && npm start"
+        environment:
+          - NODE_ENV=development
+          - PORT=7000
+        ports:
+          - '7000:7000'
+        working_dir: /root/njs1
+        volumes:
+          - ./njs1:/root/njs1:cached
+
+    njs2:
+        image: node:12.3-alpine
+        command: sh -c "npm install && npm start"
+        environment:
+            - NODE_ENV=development
+            - PORT=8000
+        ports:
+            - '8000:8000'
+        working_dir: /root/njs2
+        volumes:
+            - ./njs2:/root/njs2:cached
+    db:
+        image: mysql:5.7
+        restart: always
+        environment:
+            MYSQL_DATABASE: 'db'
+            MYSQL_USER: 'user'
+            MYSQL_PASSWORD: 'password'
+            MYSQL_ROOT_PASSWORD: 'password'
+        ports:
+            - '3307:3306'
+        expose:
+            - '3307'
+        volumes:
+            - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+        networks:
+            - app-network
+
+volumes:
+    my-db:
+        driver: local
+    nginx_laravel:
+        driver: local
+
+networks:
+    app-network:
+        driver: bridge
